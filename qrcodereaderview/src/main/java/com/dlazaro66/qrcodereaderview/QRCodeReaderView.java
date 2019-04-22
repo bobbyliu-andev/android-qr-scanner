@@ -23,6 +23,9 @@ import android.hardware.Camera;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
+import android.view.ScaleGestureDetector.SimpleOnScaleGestureListener;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -92,6 +95,47 @@ public class QRCodeReaderView extends SurfaceView
             throw new RuntimeException("Error: Camera not found");
         }
     }
+
+    // region Modified by Chang Liu
+
+    private Camera camera;
+    private ScaleGestureDetector scaleGestureDetector;
+
+    private void setCamera() {
+        scaleGestureDetector = new ScaleGestureDetector(this.getContext(), new ScaleListener());
+        camera = mCameraManager.getOpenCamera().getCamera();
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        scaleGestureDetector.onTouchEvent(event);
+        return true;
+    }
+
+    class ScaleListener extends SimpleOnScaleGestureListener {
+        private int factor = 1;
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            Camera.Parameters parameters = camera.getParameters();
+            int maxZoom = parameters.getMaxZoom() - 1;
+            float scaleFactor = detector.getScaleFactor();
+
+            if (scaleFactor > 1.4) {
+                factor += 1;
+                factor = factor > maxZoom ? maxZoom : factor;
+            } else if (scaleFactor < 0.9) {
+                factor -= 1;
+                factor = factor < 1 ? 1 : factor;
+            }
+
+            parameters.setZoom(factor);
+            camera.setParameters(parameters);
+
+            return super.onScale(detector);
+        }
+    }
+
+    // endregion
 
     /**
      * Set the callback to return decoding result
@@ -222,6 +266,7 @@ public class QRCodeReaderView extends SurfaceView
         try {
             // Indicate camera, our View dimensions
             mCameraManager.openDriver(holder, this.getWidth(), this.getHeight());
+            setCamera();
         } catch (IOException | RuntimeException e) {
             SimpleLog.w(TAG, "Can not openDriver: " + e.getMessage());
             mCameraManager.closeDriver();
